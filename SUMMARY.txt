@@ -1,0 +1,84 @@
+# Airscape Fan Controller Project - Development Summary
+
+## Project Overview
+Created a C++ program to automatically control an Airscape 3.5e whole house fan based on temperature readings. The program monitors temperature using the fan's built-in sensors and turns off the fan when the temperature falls below a user-specified threshold.
+
+## Development Process
+
+### Initial Implementation
+- Created a C++ program to communicate with the Airscape fan API
+- Implemented HTTP requests using libcurl to control the fan
+- Used nlohmann/json for parsing the API responses
+- Set up a main loop to monitor temperature and control the fan
+- Configured with default parameters including IP address, temperature threshold, and check interval
+
+### API Corrections
+- Consulted the Airscape Gen 2 Controls API documentation
+- Corrected the API endpoint for status data (/status.json.cgi)
+- Verified that the fan off command endpoint was correct (/fanspd.cgi?dir=4)
+- Added better error handling for API communication
+
+### JSON Response Format
+- Examined the actual JSON response format from the fan
+- Corrected field names for temperature values:
+  - Changed from `house_temp` to `inside`
+  - Changed from `attic_temp` to `attic`
+  - Kept `oa` as it was already correct
+- Updated data type handling (temperatures are integers, not strings)
+- Added comprehensive display of fan information including model, version, and all temperatures
+
+### Command-Line Parameters
+- Converted hardcoded configuration to command-line parameters
+- Added flexibility to specify fan IP, temperature threshold, and other settings at runtime
+- Implemented both named (--param=value) and positional parameter styles
+- Added validation for all parameters
+- Created detailed help information
+- Updated build script to support parameter input
+
+### Build System
+- Created CMakeLists.txt for cross-platform building
+- Added build.bat script for easy Windows building
+- Set up automatic dependency handling for libcurl and nlohmann/json
+
+## Features
+
+- Monitors temperature using the fan's built-in sensors (inside, attic, or outside air)
+- Automatically turns off the fan when temperature falls below a set threshold
+- Displays detailed fan information including model, version, temperatures, and status
+- Configurable via command-line parameters
+- Works with all Airscape Gen 2 Control fans (Sierra, 2.5e, 3.5e, etc.)
+- Built with modern C++ (C++17)
+
+## Command-Line Options
+
+```
+fan_controller [options]
+
+Options:
+  --ip=ADDRESS      IP address of the Airscape fan (default: 192.168.1.100)
+  --temp=VALUE      Temperature threshold in °F (default: 75.0)
+  --source=SOURCE   Temperature source to use (inside, attic, oa) (default: inside)
+  --name=NAME       Name for the fan (default: "Airscape Fan")
+  --interval=SECS   Check interval in seconds (default: 60)
+  --help            Display help message
+```
+
+## Example Usage
+
+```
+# Basic usage with IP address
+fan_controller --ip=192.168.7.193
+
+# Specify temperature threshold and source
+fan_controller --ip=192.168.7.193 --temp=72 --source=attic
+
+# Fully customized
+fan_controller --ip=192.168.7.193 --temp=68 --source=inside --name="Attic Fan" --interval=120
+```
+
+## Project Files
+- fan_controller.cpp - Main program code
+- CMakeLists.txt - CMake configuration for building
+- README.md - Documentation for users
+- build.bat - Build script for Windows
+- SUMMARY.txt - This summary file
