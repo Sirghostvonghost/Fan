@@ -12,7 +12,7 @@
 using json = nlohmann::json;
 
 // Default configuration values
-const std::string DEFAULT_FAN_IP = "192.168.1.100";
+const std::string DEFAULT_FAN_IP = "192.168.7.193";
 const double DEFAULT_TEMPERATURE_THRESHOLD = 75.0;
 const int DEFAULT_CHECK_INTERVAL = 60;
 const std::string DEFAULT_TEMP_SOURCE = "inside";
@@ -29,7 +29,61 @@ size_t WriteCallback(void* contents, size_t size, size_t nmemb, std::string* s) 
         return 0;
     }
 }
+// sanatize server response 
+static std::string sanitizeForJson(const std::string& in) {
+    std::string out;
+    out.reserve(in.size());
+    size_t i = 0, n = in.size();
+    while (i < n) {
+        unsigned char c = in[i];
 
+        if (c < 0x80) {                              // ASCII
+            // drop control chars JSON won't accept unescaped; keep \t \n \r
+            if (c < 0x20 && c != '\t' && c != '\n' && c != '\r')
+                out += '?';
+            else
+                out += static_cast<char>(c);
+            ++i;
+            continue;
+        }
+
+        size_t len;
+        if      ((c >> 5) == 0x6)  len = 2;
+        else if ((c >> 4) == 0xE)  len = 3;
+        else if ((c >> 3) == 0x1E) len = 4;
+        else { out += '?'; ++i; continue; }          // bad lead byte
+
+        if (i + len > n) { out += '?'; ++i; continue; }
+        bool ok = true;
+        for (size_t j = 1; j < len; ++j)
+            if ((static_cast<unsigned char>(in[i+j]) >> 6) != 0x2) { ok = false; break; }
+
+        if (ok) { out.append(in, i, len); i += len; }
+        else    { out += '?'; ++i; }
+    }
+    return out;
+}
+// 
+static std::string dropServerResponse(const std::string& in) {
+    const std::string key = "\"server_response\"";
+    auto k = in.find(key);
+    if (k == std::string::npos) return in;
+
+    // find the opening quote of the value
+    auto colon = in.find(':', k + key.size());
+    auto vq = in.find('"', colon + 1);
+    if (vq == std::string::npos) return in;
+
+    // value runs until the LAST quote before the next key/line.
+    // device terminates it with: "<binary>",\n  "dip_switches"
+    auto next = in.find("\"dip_switches\"", vq);
+    if (next == std::string::npos) return in;
+
+    // splice out "server_response": "...", keeping JSON valid
+    std::string out = in.substr(0, k);
+    out += in.substr(next);     // resume at the next key
+    return out;
+}
 // Function to get the current fan status
 json getFanStatus(const std::string& fanIp) {
     CURL* curl;
@@ -51,17 +105,22 @@ json getFanStatus(const std::string& fanIp) {
             std::cerr << "Failed to get fan status: " << curl_easy_strerror(res) << std::endl;
         } else {
             try {
-                responseJson = json::parse(readBuffer);
+                auto something = dropServerResponse(readBuffer);
+                std::cout << something << std::endl;
+                responseJson = json::parse(something);
+                
                 std::cout << "Fan status retrieved successfully" << std::endl;
             } catch (const std::exception& e) {
                 std::cerr << "Error parsing JSON response: " << e.what() << std::endl;
-                std::cerr << "Raw response: " << readBuffer << std::endl;
+                //std::cerr << "Raw response: " << responseJson << std::endl;
             }
         }
     }
     
     return responseJson;
 }
+
+
 
 // Function to turn the fan off
 bool turnFanOff(const std::string& fanIp) {
